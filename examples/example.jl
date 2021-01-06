@@ -6,7 +6,10 @@
 using PyPlot
 using IterativeSolvers
 using SpecialFunctions
+using FFTW
+using LinearAlgebra
 
+import Base.:*
 include("../src/FastConvolution.jl")
 include("../src/Preconditioner.jl")
 
@@ -14,8 +17,8 @@ include("../src/Preconditioner.jl")
 # setting the number of threads for the FFT and BLAS
 # libraries (please set them to match the number of
 # physical cores in your system)
-FFTW.set_num_threads(4);
-BLAS.set_num_threads(4);
+FFTW.set_num_threads(10)
+BLAS.set_num_threads(10)
 
 
 #Defining Omega
@@ -28,8 +31,8 @@ x = collect(-a/2:h:a/2)
 y = collect(-a/2:h:a/2)
 (n,m) = length(x), length(y)
 N = n*m
-X = repmat(x, 1, m)[:]
-Y = repmat(y', n,1)[:]
+X = repeat(x, 1, m)[:]
+Y = repeat(y', n,1)[:]
 # we solve \triangle u + k^2(1 + nu(x))u = 0
 
 # We use the modified quadrature in Ruan and Rohklin
@@ -47,9 +50,10 @@ fastconv = buildFastConvolution(x,y,h,k,nu, quadRule = "Greengard_Vico");
 
 # assembling the sparsifiying preconditioner
 @time As = buildSparseA(k,X,Y,D0, n ,m);
-
+nu(X,Y)
 # assembling As*( I + k^2G*nu)
-@time Mapproxsp = As + k^2*(buildSparseAG(k,X,Y,D0, n ,m)*spdiagm(nu(X,Y)));
+@time Mapproxsp = As + k^2*(buildSparseAG(k,X,Y,D0, n ,m)*spdiagm(0 => nu(X,Y)));
+
 
 # defining the preconditioner
 precond = SparsifyingPreconditioner(Mapproxsp, As)#, solverType="MKLPardiso")
@@ -61,7 +65,7 @@ rhs = -k^2*FFTconvolution(fastconv, nu(X,Y).*u_inc) ;
 #rhs = u_inc;
 
 # allocating the solution
-u = zeros(Complex128,N);
+u = zeros(ComplexF64,N)
 
 # solving the system using GMRES
 @time info =  gmres!(u, fastconv, rhs, Pl=precond, log = true)

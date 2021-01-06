@@ -2,12 +2,15 @@
 # sparsifiying preconditioner
 # Ying 2014 Sparsifying preconditioners for the Lippmann-Schwinger Equation
 
+using Distributed
+using SharedArrays
+using LinearAlgebra
 include("Functions.jl")
 
 
-type FastM
+struct FastM
     # type to encapsulate the fast application of M = I + omega^2G*spadiagm(nu)
-    GFFT :: Array{Complex128,2}
+    GFFT :: Array{ComplexF64,2}
     nu :: Array{Float64,1}
     # number of points in the extended domain
     ne :: Int64
@@ -24,25 +27,24 @@ type FastM
 end
 
 import Base.*
-import Base.A_mul_B!
-import Base.eltype
+import LinearAlgebra.mul!
 import Base.size
-import Base.issymmetric
 
-function *(M::FastM, b::Array{Complex128,1})
+
+function *(M::FastM, b::Array{ComplexF64,1})
     # function to overload the applyication of
     # M using a Toeplitz reduction via a FFT
     # dummy function to call fastconvolution
     return fastconvolution(M,b)
 end
 
-# function A_mul_B!(Y::Array{Complex128,1},M::FastM, V::Array{Complex128,1})
+# function mul!(Y::Array{ComplexF64,1},M::FastM, V::Array{ComplexF64,1})
 #     # in place matrix matrix multiplication
 #     assert(size(Y) == size(V))
 #     Y = fastconvolution(M,V)
 # end
 
-# function A_mul_B!(Y::SubArray{Complex{Float64},1,Array{Complex{Float64},2}},
+# function mul!(Y::SubArray{Complex{Float64},1,Array{Complex{Float64},2}},
 #                   M::FastM,
 #                   V::SubArray{Complex{Float64},1,Array{Complex{Float64},2}})
 #     # in place matrix matrix multiplication
@@ -53,7 +55,7 @@ end
 #     end
 # end
 
-# function A_mul_B!(Y::Array{Complex128,1},
+# function mul!(Y::Array{ComplexF64,1},
 #                   M::FastM,
 #                   V::SubArray{Complex{Float64},1,Array{Complex{Float64},2}})
 #     # in place matrix matrix multiplication
@@ -63,9 +65,7 @@ end
 
 # end
 
-function A_mul_B!(Y,
-                  M::FastM,
-                  V)
+function mul!(Y, M::FastM, V)
     # in place matrix matrix multiplication
     @assert(size(Y) == size(V))
     # print(size(V))
@@ -87,7 +87,7 @@ function size(M::FastM, dim::Int64)
 end
 
 
-@inline function fastconvolution(M::FastM, b::Array{Complex128,1})
+@inline function fastconvolution(M::FastM, b::Array{ComplexF64,1})
     # function to overload the applyication of
     # M using a Toeplitz reduction via a FFT
 
@@ -99,7 +99,7 @@ end
       indMiddle = round.(Integer, M.n)
 
       # Allocate the space for the extended B
-      BExt = zeros(Complex128,M.ne, M.me);
+      BExt = zeros(ComplexF64,M.ne, M.me);
       # Apply spadiagm(nu) and ented by zeros
       BExt[1:M.n,1:M.m]= reshape(M.nu.*b,M.n,M.m) ;
 
@@ -118,7 +118,7 @@ end
       # frequency domain
 
       # Allocate the space for the extended B
-      BExt = zeros(Complex128,M.ne, M.me);
+      BExt = zeros(ComplexF64,M.ne, M.me);
       # Apply spadiagm(nu) and ented by zeros
       BExt[1:M.n,1:M.m]= reshape(M.nu.*b,M.n,M.m) ;
 
@@ -138,7 +138,7 @@ end
     return (b + B[:])
 end
 
-@inline function FFTconvolution(M::FastM, b::Array{Complex128,1})
+@inline function FFTconvolution(M::FastM, b::Array{ComplexF64,1})
     # function to overload the applyication of
     # convolution of b times G
 
@@ -148,7 +148,7 @@ end
       indMiddle = round(Integer, M.n)
 
       # Allocate the space for the extended B
-      BExt = zeros(Complex128,M.ne, M.ne);
+      BExt = zeros(ComplexF64,M.ne, M.ne);
       # Apply spadiagm(nu) and ented by zeros
       BExt[1:M.n,1:M.m]= reshape(M.nu.*b,M.n,M.m) ;
 
@@ -167,7 +167,7 @@ end
       # frequency domain
 
       # Allocate the space for the extended B
-      BExt = zeros(Complex128,M.ne, M.ne);
+      BExt = zeros(ComplexF64,M.ne, M.ne);
       # Apply spadiagm(nu) and ented by zeros
       BExt[1:M.n,1:M.n]= reshape(b,M.n,M.n) ;
 
@@ -187,7 +187,7 @@ end
 # # #this is the sequantial version for sampling G
 # function sampleG(k,X,Y,indS, D0)
 #     # function to sample the Green's function at frequency k
-#     Gc = zeros(Complex128, length(indS), length(X))
+#     Gc = zeros(ComplexF64, length(indS), length(X))
 #     for i = 1:length(indS)
 #         ii = indS[i]
 #         r  = sqrt( (X-X[ii]).^2 + (Y-Y[ii]).^2);
@@ -208,8 +208,8 @@ function buildFastConvolution(x::Array{Float64,1},y::Array{Float64,1},
     (n,m) = length(x), length(y)
     Ge    = buildGConv(x,y,h,n,m,D0,k);
     GFFT  = fft(Ge);
-    X = repmat(x, 1, m)[:]
-    Y = repmat(y', n,1)[:]
+    X = repeat(x, 1, m)[:]
+    Y = repeat(y', n,1)[:]
 
     return FastM(GFFT,nu(X,Y),2*n-1,2*m-1,n, m, k);
 
@@ -218,16 +218,16 @@ function buildFastConvolution(x::Array{Float64,1},y::Array{Float64,1},
       Lp = 4*(abs(x[end] - x[1]) + h)
       L  =   (abs(x[end] - x[1]) + h)*1.5
       (n,m) = length(x), length(y)
-      X = repmat(x, 1, m)[:]
-      Y = repmat(y', n,1)[:]
+      X = repeat(x, 1, m)[:]
+      Y = repeat(y', n,1)[:]
 
       # this is depending if n is odd or not
       if mod(n,2) == 0
         kx = (-(2*n):1:(2*n-1));
         ky = (-(2*m):1:(2*m-1));
 
-        KX = (2*pi/Lp)*repmat(kx, 1, 4*m);
-        KY = (2*pi/Lp)*repmat(ky', 4*n,1);
+        KX = (2*pi/Lp)*repeat(kx, 1, 4*m);
+        KY = (2*pi/Lp)*repeat(ky', 4*n,1);
 
         S = sqrt(KX.^2 + KY.^2);
 
@@ -238,8 +238,8 @@ function buildFastConvolution(x::Array{Float64,1},y::Array{Float64,1},
         # kx = (-2*(n-1):1:2*(n-1) )/4;
         # ky = (-2*(m-1):1:2*(m-1) )/4;
 
-        # KX = (2*pi/Lp)*repmat(kx, 1, 4*m-3);
-        # KY = (2*pi/Lp)*repmat(ky', 4*n-3,1);
+        # KX = (2*pi/Lp)*repeat(kx, 1, 4*m-3);
+        # KY = (2*pi/Lp)*repeat(ky', 4*n-3,1);
 
         # S = sqrt(KX.^2 + KY.^2);
 
@@ -251,8 +251,8 @@ function buildFastConvolution(x::Array{Float64,1},y::Array{Float64,1},
         kx = (-2*n:1:2*n-1);
         ky = (-2*m:1:2*m-1);
 
-        KX = (2*pi/Lp)*repmat( kx, 1,4*m);
-        KY = (2*pi/Lp)*repmat(ky',4*n,  1);
+        KX = (2*pi/Lp)*repeat( kx, 1,4*m);
+        KY = (2*pi/Lp)*repeat(ky',4*n,  1);
 
         S = sqrt.(KX.^2 + KY.^2);
 
@@ -274,7 +274,7 @@ end
   #   Xshared = SharedArray(X)
   #   Yshared = SharedArray(Y)
   #   @sync begin
-  #     @parallel for i = 1:length(indS)
+  #     @distributed for i = 1:length(indS)
   #   #for i = 1:length(indS)
   #     ii = indS[i]
   #     R[i,:]  = sqrt( (X-X[ii]).^2 + (Y-Y[ii]).^2);
@@ -284,14 +284,14 @@ end
 
   h = abs(X[2] - X[1])
 
-  R  = SharedArray(Float64, length(indS), length(X))
+  R  = SharedArray{Float64}(length(indS), length(X))
   Xshared = convert(SharedArray, X)
   Yshared = convert(SharedArray, Y)
   @sync begin
-    @parallel for i = 1:length(indS)
+    @distributed for i = 1:length(indS)
       #for i = 1:length(indS)
       ii = indS[i]
-      R[i,:]  = sqrt.( (Xshared-Xshared[ii]).^2 + (Yshared-Yshared[ii]).^2);
+      R[i,:]  = sqrt.( (Xshared .- Xshared[ii]).^2 + (Yshared .- Yshared[ii]).^2);
       R[i,ii] = 1;
     end
   end
@@ -314,7 +314,7 @@ function sampleGConv(k,X,Y,indS, fastconv::FastM)
   #   Xshared = SharedArray(X)
   #   Yshared = SharedArray(Y)
   #   @sync begin
-  #     @parallel for i = 1:length(indS)
+  #     @distributed for i = 1:length(indS)
   #   #for i = 1:length(indS)
   #     ii = indS[i]
   #     R[i,:]  = sqrt( (X-X[ii]).^2 + (Y-Y[ii]).^2);
@@ -322,14 +322,14 @@ function sampleGConv(k,X,Y,indS, fastconv::FastM)
   #   end
   # end
 
-  R  = zeros(Complex128, length(indS), length(X))
+  R  = zeros(ComplexF64, length(indS), length(X))
    for i = 1:length(indS)
       #for i = 1:length(indS)
       ii = indS[i]
       R[i,ii] = 1;
     end
 
-   Gc =  zeros(Complex128, length(indS), length(X))
+   Gc =  zeros(ComplexF64, length(indS), length(X))
     for i = 1:length(indS)
         Gc[i,:]= FFTconvolution(fastconv, R[i,:][:])
     end
@@ -372,16 +372,16 @@ end
         return 1:0, 1:0
     end
     nchunks = length(procs(q))
-    splits = [round(Int, s) for s in linspace(0,size(q,2),nchunks+1)]
+    splits = [round(Int, s) for s in range(0, stop = size(q,2), step =nchunks+1)]
     1:size(q,1), splits[idx]+1:splits[idx+1]
 end
 
 @everywhere function sampleGkernelpar(k,r::Array{Float64,1},h)
   n  = length(r)
   println("Sample kernel parallel loop ")
-  G = SharedArray(Complex128,n)
+  G = SharedArray{ComplexF64}(n)
   rshared = convert(SharedArray, r)
-  @sync @parallel for ii = 1:n
+  @sync @distributed for ii = 1:n
           @inbounds  G[ii] = 1im/4*hankelh1(0, k*rshared[ii])*h^2;
   end
   return sdata(G)
@@ -392,7 +392,7 @@ end
 @everywhere function sampleGkernelpar(k,R::Array{Float64,2},h)
   (m,n)  = size(R)
   println("Sample kernel parallel loop with chunks ")
-  G = SharedArray(Complex128,m,n)
+  G = SharedArray{ComplexF64}(m,n)
   @time Rshared = convert(SharedArray, R)
   @sync begin
         for p in procs(G)
@@ -405,7 +405,7 @@ end
 @everywhere function sampleGkernelpar(k,R::SharedArray{Float64,2},h)
   (m,n)  = size(R)
   #println("Sample kernel parallel loop with chunks 2 ")
-  G = SharedArray(Complex128,m,n)
+  G = SharedArray{ComplexF64}(m,n)
   @sync begin
         for p in procs(G)
             @async remotecall_fetch(sampleGkernel_shared_chunk!,p, G, R,k,h)
@@ -438,7 +438,7 @@ end
 function entriesSparseA(k,X,Y,D0, n ,m)
   # we need to have an even number of points
   @assert mod(length(X),2) == 1
-  Entries  = Array{Complex128}[]
+  Entries  = Array{ComplexF64}[]
   Indices  = Array{Int64}[]
 
   IndRelative = zeros(Int64,3,3)
@@ -450,7 +450,7 @@ function entriesSparseA(k,X,Y,D0, n ,m)
 
   # computing the entries for the interior
   # extracting indices at the center of the stencil
-  indVol = round.(Integer, n*(m-1)/2 + (n+1)/2 + IndRelative[:] );
+  indVol = round.(Integer, n*(m-1)/2 + (n+1)/2 .+ IndRelative[:] );
   # extracting only the far field indices
   indVolC = setdiff(collect(1:N),indVol);
   GSampled = sampleG(k,X,Y,indVol, D0)[:,indVolC];
@@ -463,7 +463,7 @@ function entriesSparseA(k,X,Y,D0, n ,m)
   # this is for the edges
 
   # for  x = xmin, y = 0
-  indFz1 = round.(Integer, n*(m-1)/2 +1 + IndRelative[:,2:3][:]);
+  indFz1 = round.(Integer, n*(m-1)/2 +1 .+ IndRelative[:,2:3][:]);
   indC = setdiff(collect(1:N),indFz1);
   GSampled = sampleG(k,X,Y,indFz1, D0)[:,indC ];
   (U,s,V) = svd(GSampled);
@@ -471,7 +471,7 @@ function entriesSparseA(k,X,Y,D0, n ,m)
   push!(Indices, IndRelative[:,2:3][:]); #'
 
   # for  x = xmax, y = 0
-  indFz2 = round.(Integer, n*(m-1)/2 + IndRelative[:,1:2][:]);
+  indFz2 = round.(Integer, n*(m-1)/2 .+ IndRelative[:,1:2][:]);
   indC = setdiff(collect(1:N),indFz2);
   GSampled = sampleG(k,X,Y,indFz2, D0)[:,indC ];
   (U,s,V) = svd(GSampled);
@@ -479,7 +479,7 @@ function entriesSparseA(k,X,Y,D0, n ,m)
   push!(Indices,IndRelative[:,1:2][:]); #'
 
   # for  y = ymin, x = 0
-  indFx1 = round.(Integer, (n+1)/2 + IndRelative[2:3,:][:]);
+  indFx1 = round.(Integer, (n+1)/2 .+ IndRelative[2:3,:][:]);
   indC = setdiff(collect(1:N),indFx1);
   GSampled = sampleG(k,X,Y,indFx1, D0)[:,indC ];
   (U,s,V) = svd(GSampled);
@@ -487,7 +487,7 @@ function entriesSparseA(k,X,Y,D0, n ,m)
   push!(Indices, IndRelative[2:3,:][:]); #'
 
   # for  y = ymin, x = 0
-  indFx2 = round.(Integer, N - (n+1)/2 + IndRelative[1:2,:][:]);
+  indFx2 = round.(Integer, N - (n+1)/2 .+ IndRelative[1:2,:][:]);
   indC = setdiff(collect(1:N),indFx2);
   GSampled = sampleG(k,X,Y,indFx2, D0)[:,indC ];
   (U,s,V) = svd(GSampled);
@@ -495,10 +495,10 @@ function entriesSparseA(k,X,Y,D0, n ,m)
   push!(Indices,IndRelative[1:2,:][:]); #'
 
   # For the corners
-  indcorner1 = round.(Integer, 1       + IndRelative[2:3,2:3][:]);
-  indcorner2 = round.(Integer, n       + IndRelative[2:3,1:2][:]);
-  indcorner3 = round.(Integer, n*m-n+1 + [0, 1,-n,-n+1]);
-  indcorner4 = round.(Integer, n*m     + [0,-1,-n,-n-1]);
+  indcorner1 = round.(Integer, 1       .+ IndRelative[2:3,2:3][:]);
+  indcorner2 = round.(Integer, n       .+ IndRelative[2:3,1:2][:]);
+  indcorner3 = round.(Integer, n*m-n+1 .+ [0, 1,-n,-n+1]);
+  indcorner4 = round.(Integer, n*m     .+ [0,-1,-n,-n-1]);
 
   indC = setdiff(collect(1:N),indcorner1);
   GSampled = sampleG(k,X,Y,indcorner1, D0)[:,indC ];
@@ -537,7 +537,7 @@ end
 function entriesSparseAConv(k,X,Y,fastconv::FastM, n ,m)
   # we need to have an even number of points
   @assert mod(length(X),2) == 1
-  Entries  = Array{Complex128}[]
+  Entries  = Array{ComplexF64}[]
   Indices  = Array{Int64}[]
 
   IndRelative = zeros(Int64,3,3)
@@ -638,7 +638,7 @@ function entriesSparseA3D(k,X,Y,Z,D0, n ,m, l)
   # in this case we need to build everythig with ranodmized methods
   # we need to have an odd number of points
   #@assert mod(length(X),2) == 1
-  Entries  = Array{Complex128}[]
+  Entries  = Array{ComplexF64}[]
   Indices  = Array{Int64}[]
 
   N = n*m*l;
@@ -959,8 +959,8 @@ function buildGConv(x,y,h::Float64,n::Int64,m::Int64,D0,k::Float64)
       xe = collect((x[1]-(n-1)/2*h):h:(x[end]+(n-1)/2*h));
       ye = collect((y[1]-(m-1)/2*h):h:(y[end]+(m-1)/2*h));
 
-      Xe = repmat(xe, 1, 2*m-1);
-      Ye = repmat(ye', 2*n-1,1);
+      Xe = repeat(xe, 1, 2*m-1);
+      Ye = repeat(ye', 2*n-1,1);
 
 
     else
@@ -971,8 +971,8 @@ function buildGConv(x,y,h::Float64,n::Int64,m::Int64,D0,k::Float64)
       # xe = collect((x[1]-n/2*h):h:(x[end]+n/2*h));
       # ye = collect((y[1]-m/2*h):h:(y[end]+m/2*h));
 
-      # Xe = repmat(xe, 1, 2*m-1);
-      # Ye = repmat(ye', 2*n-1,1);
+      # Xe = repeat(xe, 1, 2*m-1);
+      # Ye = repeat(ye', 2*n-1,1);
       # # to avoid evaluating at the singularity
       # indMiddle = m
 
@@ -1001,8 +1001,8 @@ function buildGConvPar(x,y,h,n,m,D0,k)
     xe = collect((x[1]-(n-1)/2*h):h:(x[end]+(n-1)/2*h));
     ye = collect((y[1]-(m-1)/2*h):h:(y[end]+(m-1)/2*h));
 
-    Xe = repmat(xe, 1, 2*m-1);
-    Ye = repmat(ye', 2*n-1,1);
+    Xe = repeat(xe, 1, 2*m-1);
+    Ye = repeat(ye', 2*n-1,1);
 
     R = sqrt(Xe.^2 + Ye.^2);
     # to avoid evaluating at the singularity
@@ -1022,7 +1022,7 @@ end
 
 
 
-function createIndices(row::Array{Int64,1}, col::Array{Int64,1}, val::Array{Complex128,1})
+function createIndices(row::Array{Int64,1}, col::Array{Int64,1}, val::Array{ComplexF64,1})
   # function to create the indices for a sparse matrix
   @assert length(col) == length(val)
   nn = length(col);
@@ -1034,7 +1034,7 @@ function createIndices(row::Array{Int64,1}, col::Array{Int64,1}, val::Array{Comp
   return (Row,Col,Val)
 end
 
-function createIndices(row::Int64, col::Array{Int64,1}, val::Array{Complex128,1})
+function createIndices(row::Int64, col::Array{Int64,1}, val::Array{ComplexF64,1})
 
   @assert length(col) == length(val)
   nn = length(col);
@@ -1046,12 +1046,12 @@ function createIndices(row::Int64, col::Array{Int64,1}, val::Array{Complex128,1}
   return (Row,Col,Val)
 end
 
-function buildConvMatrix(k::Float64,X::Array{Float64,1},Y::Array{Float64,1},D0::Complex128, h::Float64)
+function buildConvMatrix(k::Float64,X::Array{Float64,1},Y::Array{Float64,1},D0::ComplexF64, h::Float64)
     # function to build the convolution matrix
     @assert length(X) == length(Y)
     N = length(X);
 
-    G = zeros(Complex128, N, N);
+    G = zeros(ComplexF64, N, N);
 
     r = zeros(Float64,N)
     for ii = 1:N
@@ -1068,7 +1068,7 @@ end
 
 
 function buildSparseA(k::Float64,X::Array{Float64,1},Y::Array{Float64,1},
-                       D0::Complex128, n::Int64 ,m::Int64; method::String = "normal")
+                       D0::ComplexF64, n::Int64 ,m::Int64; method::String = "normal")
 # function that build the sparsigying preconditioner
 
 
@@ -1233,7 +1233,7 @@ end
 ## To be done! (I don't remember how I built this one)
 function buildSparseA3D(k::Float64,X::Array{Float64,1},Y::Array{Float64,1},
                         Z::Array{Float64,1},
-                        D0::Complex128, n::Int64 ,m::Int64,l::Int64; method::String = "normal")
+                        D0::ComplexF64, n::Int64 ,m::Int64,l::Int64; method::String = "normal")
 # function that build the sparsigying preconditioner
 
 
@@ -1477,13 +1477,13 @@ function buildSparseA3D(k::Float64,X::Array{Float64,1},Y::Array{Float64,1},
 end
 
 function entriesSparseG(k::Float64,X::Array{Float64,1},Y::Array{Float64,1},
-                        D0::Complex128, n::Int64 ,m::Int64)
+                        D0::ComplexF64, n::Int64 ,m::Int64)
   # function to compute the entried of G, inside the volume, at the boundaries
   # and at the corners. This allows us to compute A*G in O(n) time instead of
   # O(n^2)
   # we need to have an even number of points
   @assert mod(length(X),2) == 1
-  Entries  = Array{Complex128}[]
+  Entries  = Array{ComplexF64}[]
 
   IndRelative = zeros(Int64,3,3)
   IndRelative = [-n-1 -n -n+1;
@@ -1493,41 +1493,41 @@ function entriesSparseG(k::Float64,X::Array{Float64,1},Y::Array{Float64,1},
   N = n*m;
 
   # computing the entries for the interior
-  indVol = round.(Integer, n*(m-1)/2 + (n+1)/2 + IndRelative[:] );
+  indVol = round.(Integer, n*(m-1)/2 + (n+1)/2 .+ IndRelative[:] );
   GSampled = sampleG(k,X,Y,indVol, D0)[:,indVol];
 
   push!(Entries,GSampled);
 
   # for  x = xmin, y = 0
-  indFz1 = round.(Integer, n*(m-1)/2 +1 + [0,1,n,n+1,-n, -n+1]);
+  indFz1 = round.(Integer, n*(m-1)/2 +1 .+ [0,1,n,n+1,-n, -n+1]);
   GSampled = sampleG(k,X,Y,indFz1, D0)[:,indFz1];
 
   push!(Entries,GSampled);
 
   # for  x = xmax, y = 0
-  indFz2 = round.(Integer, n*(m-1)/2 + [-1,0,n,n-1,-n, -n-1]);
+  indFz2 = round.(Integer, n*(m-1)/2 .+ [-1,0,n,n-1,-n, -n-1]);
   GSampled = sampleG(k,X,Y,indFz2, D0)[:,indFz2];
 
   push!(Entries,GSampled);
 
   # for  y = ymin, x = 0
-  indFx1 = round.(Integer, (n+1)/2 + [-1,0,1,n,n+1, n-1]);
+  indFx1 = round.(Integer, (n+1)/2 .+ [-1,0,1,n,n+1, n-1]);
   GSampled = sampleG(k,X,Y,indFx1, D0)[:,indFx1];
 
   push!(Entries,GSampled);
 
 
   # for  y = ymin, x = 0
-  indFx2 = round.(Integer, N - (n+1)/2 + [-1,0,1,-n,-n+1, -n-1]);
+  indFx2 = round.(Integer, N - (n+1)/2 .+ [-1,0,1,-n,-n+1, -n-1]);
   GSampled = sampleG(k,X,Y,indFx2, D0)[:,indFx2];
 
   push!(Entries,GSampled);
 
   # For the corners
-  indcorner1 = round.(Integer, 1 + [0,1, n,n+1]);
-  indcorner2 = round.(Integer, n + [0,-1, n,n-1]);
-  indcorner3 = round.(Integer, n*m-n+1 + [0,1, -n,-n+1]);
-  indcorner4 = round.(Integer, n*m + [0,-1, -n,-n-1]);
+  indcorner1 = round.(Integer, 1 .+ [0,1, n,n+1]);
+  indcorner2 = round.(Integer, n .+ [0,-1, n,n-1]);
+  indcorner3 = round.(Integer, n*m-n+1 .+ [0,1, -n,-n+1]);
+  indcorner4 = round.(Integer, n*m .+ [0,-1, -n,-n-1]);
 
   GSampled = sampleG(k,X,Y,indcorner1, D0)[:,indcorner1];
   push!(Entries,GSampled);
@@ -1556,7 +1556,7 @@ function entriesSparseGConv(k::Float64,X::Array{Float64,1},Y::Array{Float64,1},
   # O(n^2)
   # we need to have an even number of points
   @assert mod(length(X),2) == 1
-  Entries  = Array{Complex128}[]
+  Entries  = Array{ComplexF64}[]
 
   IndRelative = zeros(Int64,3,3)
   IndRelative = [-n-1 -n -n+1;
@@ -1624,14 +1624,14 @@ end
 
 function entriesSparseG3D(k::Float64,X::Array{Float64,1},Y::Array{Float64,1},
                           Z::Array{Float64,1},
-                          D0::Complex128, n::Int64 ,m::Int64,l::Int64)
+                          D0::ComplexF64, n::Int64 ,m::Int64,l::Int64)
   # function to compute the entried of G, inside the volume, at the boundaries
   # and at the corners. This allows us to compute A*G in O(n) time instead of
   # O(n^2)
   # we need to have an even number of points
   #
 
-  Entries  = Array{Complex128}[]
+  Entries  = Array{ComplexF64}[]
 
   N = n*m*l;
 
@@ -1794,7 +1794,7 @@ end
 
 
 function buildSparseAG(k::Float64,X::Array{Float64,1},Y::Array{Float64,1},
-                       D0::Complex128, n::Int64 ,m::Int64; method::String = "normal")
+                       D0::ComplexF64, n::Int64 ,m::Int64; method::String = "normal")
 # function that build the sparsigying preconditioner
 
 
@@ -1976,7 +1976,7 @@ end
 
 function buildSparseAG3D(k::Float64,X::Array{Float64,1},Y::Array{Float64,1},
                           Z::Array{Float64,1},
-                          D0::Complex128, n::Int64 ,m::Int64,l::Int64; method::String = "normal")
+                          D0::ComplexF64, n::Int64 ,m::Int64,l::Int64; method::String = "normal")
 # function that build the sparsigying preconditioner
 
 
@@ -2238,7 +2238,7 @@ end
 #   # we need to have an even number of points
 #   # We compute the entries for the matrix A using randomized methods
 #   @assert mod(length(X),2) == 1
-#   Entries  = Array{Complex128}[]
+#   Entries  = Array{ComplexF64}[]
 #   Indices  = Array{Int64}[]
 
 #   N = n*m;
