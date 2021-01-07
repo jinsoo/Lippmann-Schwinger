@@ -4,9 +4,9 @@
 
 
 
-type FastMDual
+struct FastMDual
     # type to encapsulate the fast application of M = I + omega^2G*spadiagm(nu)
-    GFFT :: Array{Complex128,2}
+    GFFT :: Array{ComplexF64,2}
     nu :: Array{Float64,1}
     # number of points in the extended domain
     ne :: Int64
@@ -24,7 +24,7 @@ end
 
 # we need to overload these functions for gmres
 import Base.*
-import Base.A_mul_B!
+import LinearAlgebra.mul!
 import Base.size
 
 function size(M::FastMDual, dim::Int64)
@@ -32,14 +32,14 @@ function size(M::FastMDual, dim::Int64)
   return M.m*M.n
 end
 
-function *(M::FastMDual, b::Array{Complex128,1})
+function *(M::FastMDual, b::Array{ComplexF64,1})
     # function to overload the applyication of
     # M using a Toeplitz reduction via a FFT
     # dummy function to call fastconvolution
     return fastconvolution(M,b)
 end
 
-function A_mul_B!(Y,
+function mul!(Y,
                   M::FastMDual,
                   V)
     # in place matrix matrix multiplication
@@ -52,7 +52,7 @@ end
 
 
 
-@inline function fastconvolution(M::FastMDual, b::Array{Complex128,1})
+@inline function fastconvolution(M::FastMDual, b::Array{ComplexF64,1})
     # function to overload the applyication of
     # M using a Toeplitz reduction via a FFT
 
@@ -64,7 +64,7 @@ end
 end
 
 
-@inline function FFTconvolution(M::FastMDual, b::Array{Complex128,1})
+@inline function FFTconvolution(M::FastMDual, b::Array{ComplexF64,1})
     # function to overload the applyication of
     # convolution of b times G
 
@@ -74,7 +74,7 @@ end
       indMiddle = round(Integer, M.n)
 
       # Allocate the space for the extended B
-      BExt = zeros(Complex128,M.ne, M.me);
+      BExt = zeros(ComplexF64,M.ne, M.me);
       # Apply spadiagm(nu) and ented by zeros
       BExt[1:M.n,1:M.m]= reshape(M.nu.*b,M.n,M.m) ;
 
@@ -93,7 +93,7 @@ end
       # frequency domain
 
       # Allocate the space for the extended B
-      BExt = zeros(Complex128,M.ne, M.me);
+      BExt = zeros(ComplexF64,M.ne, M.me);
       # Apply spadiagm(nu) and ented by zeros
       BExt[1:M.n,1:M.m]= reshape(M.nu.*b,M.n,M.m) ;
 
@@ -121,8 +121,8 @@ function buildFastConvolutionDual(x::Array{Float64,1},y::Array{Float64,1},
     (n,m) = length(x), length(y)
     Ge    = buildGConv(x,y,h,n,m,D0,k);
     GFFT  = fft(Ge);
-    X = repmat(x, 1, m)[:]
-    Y = repmat(y', n,1)[:]
+    X = repeat(x, 1, m)[:]
+    Y = repeat(y', n,1)[:]
 
     return FastMDual(GFFT,nu(X,Y),2*n-1,2*m-1,n, m, k);
 
@@ -131,16 +131,16 @@ function buildFastConvolutionDual(x::Array{Float64,1},y::Array{Float64,1},
       Lp = 4*(abs(x[end] - x[1]) + h)
       L  =   (abs(x[end] - x[1]) + h)*1.5
       (n,m) = length(x), length(y)
-      X = repmat(x, 1, m)[:]
-      Y = repmat(y', n,1)[:]
+      X = repeat(x, 1, m)[:]
+      Y = repeat(y', n,1)[:]
 
       # this is depending if n is odd or not
       if mod(n,2) == 0
         kx = (-(2*n):1:(2*n-1));
         ky = (-(2*m):1:(2*m-1));
 
-        KX = (2*pi/Lp)*repmat(kx, 1, 4*m);
-        KY = (2*pi/Lp)*repmat(ky', 4*n,1);
+        KX = (2*pi/Lp)*repeat(kx, 1, 4*m);
+        KY = (2*pi/Lp)*repeat(ky', 4*n,1);
 
         S = sqrt.(KX.^2 + KY.^2);
 
@@ -151,8 +151,8 @@ function buildFastConvolutionDual(x::Array{Float64,1},y::Array{Float64,1},
         # kx = (-2*(n-1):1:2*(n-1) )/4;
         # ky = (-2*(m-1):1:2*(m-1) )/4;
 
-        # KX = (2*pi/Lp)*repmat(kx, 1, 4*m-3);
-        # KY = (2*pi/Lp)*repmat(ky', 4*n-3,1);
+        # KX = (2*pi/Lp)*repeat(kx, 1, 4*m-3);
+        # KY = (2*pi/Lp)*repeat(ky', 4*n-3,1);
 
         # S = sqrt.(KX.^2 + KY.^2);
 
@@ -164,8 +164,8 @@ function buildFastConvolutionDual(x::Array{Float64,1},y::Array{Float64,1},
         kx = (-2*n:1:2*n-1);
         ky = (-2*m:1:2*m-1);
 
-        KX = (2*pi/Lp)*repmat( kx, 1,4*m);
-        KY = (2*pi/Lp)*repmat(ky',4*n,  1);
+        KX = (2*pi/Lp)*repeat( kx, 1,4*m);
+        KY = (2*pi/Lp)*repeat(ky',4*n,  1);
 
         S = sqrt.(KX.^2 + KY.^2);
 
@@ -186,7 +186,7 @@ end
 
 
 function buildGSparseAandG(k::Float64,X::Array{Float64,1},Y::Array{Float64,1},
-                          D0::Complex128, n::Int64 ,m::Int64, nu::Function ; method::String = "normal")
+                          D0::ComplexF64, n::Int64 ,m::Int64, nu::Function ; method::String = "normal")
 
     nuArray = nu(X,Y)
     Ind = reshape(collect(1:n*m),n,m);
@@ -328,8 +328,8 @@ end
 
 
 function createIndices(row::Array{Int64,1}, col::Array{Int64,1},
-                       valA::Array{Complex128,1},
-                       valG::Array{Complex128,2}, nu::Array{Float64,1})
+                       valA::Array{ComplexF64,1},
+                       valG::Array{ComplexF64,2}, nu::Array{Float64,1})
   # function to create the indices for a sparse matrix
   @assert length(col) == length(valA)
   nn = length(col);
@@ -343,7 +343,7 @@ function createIndices(row::Array{Int64,1}, col::Array{Int64,1},
 
   # multiplying by the blocks of G.
   for ii = 1:mm
-    Val[(ii-1)*ll+1:ii*ll] = (Val[(ii-1)*ll+1:ii*ll].')*valG
+    Val[(ii-1)*ll+1:ii*ll] = (Val[(ii-1)*ll+1:ii*ll]')*valG
   end
 
 
@@ -351,8 +351,8 @@ function createIndices(row::Array{Int64,1}, col::Array{Int64,1},
 end
 
 function createIndices(row::Int64, col::Array{Int64,1},
-                       valA::Array{Complex128,1},
-                       valG::Array{Complex128,2}, nu::Array{Float64,1})
+                       valA::Array{ComplexF64,1},
+                       valG::Array{ComplexF64,2}, nu::Array{Float64,1})
 
   @assert length(col) == length(valA)
   nn = length(col);
@@ -367,7 +367,7 @@ function createIndices(row::Int64, col::Array{Int64,1},
 
   # multiplying by the blocks of G.
   for ii = 1:mm
-    Val[(ii-1)*ll+1:ii*ll] = (Val[(ii-1)*ll+1:ii*ll].')*valG
+    Val[(ii-1)*ll+1:ii*ll] = (Val[(ii-1)*ll+1:ii*ll]')*valG
   end
 
   return (Row,Col,Val)

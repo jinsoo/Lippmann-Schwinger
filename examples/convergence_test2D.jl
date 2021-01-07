@@ -1,4 +1,5 @@
-using PyPlot
+
+using Images
 using IterativeSolvers
 
 include("../src/FastConvolution.jl")
@@ -8,8 +9,8 @@ include("../src/Preconditioner.jl")
 # setting the number of threads for the FFT and BLAS
 # libraries (please set them to match the number of
 # physical cores in your system)
-FFTW.set_num_threads(4);
-BLAS.set_num_threads(4);
+FFTW.set_num_threads(length(Sys.cpu_info()))
+BLAS.set_num_threads(length(Sys.cpu_info()))
 
 
 #Defining Omega
@@ -20,9 +21,9 @@ uRho = []
 
 sigma = 0.05
 renorm_factor = 1/(sigma^2*(2*pi));
-rho(x,y) = renorm_factor*exp((-1/(2*sigma^2))*(x.^2 + y.^2 ));
+rho(x,y) = renorm_factor*exp.((-1/(2*sigma^2))*(x.^2 .+ y.^2 ));
 
-nu(x,y) = 0.3*exp(-40*(x.^2 + y.^2)).*(abs(x).<0.48).*(abs(y).<0.48);
+nu(x,y) = 0.3*exp.(-40*(x.^2 + y.^2)).*(abs.(x).<0.48).*(abs.(y).<0.48);
 
 nSamples = 8
 
@@ -42,17 +43,15 @@ for ii = 1:nSamples
     (n,m) = length(x), length(y)
     println(n)
     N = n*m
-    X = repmat(x, 1, m)[:]
-    Y = repmat(y', n,1)[:]
+    X = repeat(x, 1, m)[:]
+    Y = repeat(y', n,1)[:]
     # we solve \triangle u + k^2(1 + nu(x))u = 0
     
 
-    Rho = rho(X,Y) + 0*1im;
+    Rho = rho(X,Y) .+ 0*1im;
     RHO = reshape(Rho, n,m);
     
-    figure(5); clf();
-    imshow(real(RHO))
-
+    plot(Gray.(real(RHO)))
 
 
     # Greengard Vico Quadrature (this is not optimized and is 2-3 times slower)
@@ -61,7 +60,7 @@ for ii = 1:nSamples
     u_rho = FFTconvolution(fastconv, Rho);
     u_rho = reshape(u_rho,n,m)
 
-    u_inc = exp(k*im*X);
+    u_inc = exp.(k*im.*X);
     u_conv = FFTconvolution(fastconv, u_inc );
     u_conv = reshape(u_conv,n,m)   
 

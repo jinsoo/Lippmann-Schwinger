@@ -14,8 +14,9 @@ include("../src/Preconditioner.jl")
 # setting the number of threads for the FFT and BLAS
 # libraries (please set them to match the number of
 # physical cores in your system)
-FFTW.set_num_threads(4);
-BLAS.set_num_threads(4);
+FFTW.set_num_threads(length(Sys.cpu_info()))
+BLAS.set_num_threads(length(Sys.cpu_info()))
+
 
 #Defining Omega
 h = 1/64

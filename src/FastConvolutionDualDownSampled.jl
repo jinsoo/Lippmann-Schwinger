@@ -2,7 +2,7 @@
 # downsampled lippmann-Schwinger equation 
 using Interpolations
 
-type FastDualDownSampled
+struct FastDualDownSampled
     # type to encapsulate the fast application of M = I + omega^2G*spadiagm(nu)
     # Fast:: FastMslow
     Fast:: FastMslowDual
@@ -16,6 +16,7 @@ type FastDualDownSampled
 
     function FastDualDownSampled(Fast, downsampleX, downsampleY)
         # Building the Sampling matrix
+        Fast = fastconvSlowDual
         index1 = 1:downsampleX:Fast.n
         index2 = 1:downsampleY:Fast.m
         Sindex = spzeros(n,m)
@@ -25,8 +26,9 @@ type FastDualDownSampled
             end
         end
 
-        index = find(Sindex[:])
-        S = speye(n*m, n*m)
+
+        index = findall(!iszero, Sindex[:])
+        S = sparse(I, n*m, n *m) #speye(n*m, n*m)
         Sampling = S[index,:];
         return new( Fast, Fast.n, Fast.m, downsampleX, downsampleY,Sampling)
     end
@@ -34,7 +36,7 @@ end
 
 # we need to overload these functions for gmres
 import Base.*
-import Base.A_mul_B!
+import LinearAlgebra.mul!
 import Base.size
 
 function size(M::FastDualDownSampled, dim::Int64)
@@ -43,7 +45,7 @@ function size(M::FastDualDownSampled, dim::Int64)
 end
 
 
-function A_mul_B!(Y,
+function mul!(Y,
                   M::FastDualDownSampled,
                   V)
     # in place matrix matrix multiplication
@@ -55,7 +57,7 @@ function A_mul_B!(Y,
 end
 
 
-function *(M::FastDualDownSampled, b::Array{Complex128,1})
+function *(M::FastDualDownSampled, b::Array{ComplexF64,1})
     knots = (collect(1:M.downsampleX:M.n), collect(1:M.downsampleY:M.m))
     nDown = round(Integer, (M.n-1)/M.downsampleX +1)
     mDown = round(Integer, (M.m-1)/M.downsampleY +1)
@@ -72,5 +74,5 @@ function *(M::FastDualDownSampled, b::Array{Complex128,1})
     u = M.Fast*interpU[:]
     size(u)
     # Subsampling the wavefield
-    return (M.S*u)[:]
+    return (M.S*u)[:]   # TODO fix dimension mismatch
 end

@@ -3,13 +3,13 @@
 # we test that the application is fast and that the construction
 # is performed fast.
 
-using PyPlot
+using Plots
 using IterativeSolvers
 using SpecialFunctions
 using FFTW
 using LinearAlgebra
+using Images
 
-import Base.:*
 include("../src/FastConvolution.jl")
 include("../src/Preconditioner.jl")
 
@@ -17,8 +17,8 @@ include("../src/Preconditioner.jl")
 # setting the number of threads for the FFT and BLAS
 # libraries (please set them to match the number of
 # physical cores in your system)
-FFTW.set_num_threads(10)
-BLAS.set_num_threads(10)
+FFTW.set_num_threads(length(Sys.cpu_info()))
+BLAS.set_num_threads(length(Sys.cpu_info()))
 
 
 #Defining Omega
@@ -36,21 +36,21 @@ Y = repeat(y', n,1)[:]
 # we solve \triangle u + k^2(1 + nu(x))u = 0
 
 # We use the modified quadrature in Ruan and Rohklin
-(ppw,D) = referenceValsTrapRule();
-D0 = D[1];
+(ppw,D) = referenceValsTrapRule()
+D0 = D[1]
 
 # Defining the smooth perturbation of the slowness
-nu(x,y) = 0.3*exp.(-40*(x.^2 + y.^2)).*(abs.(x).<0.48).*(abs.(y).<0.48);
+nu(x,y) = 0.3*exp.(-40*(x.^2 + y.^2)).*(abs.(x).<0.48).*(abs.(y).<0.48)
 
 ## You can choose between Duan Rohklin trapezoidal quadrature
-#fastconv = buildFastConvolution(x,y,h,k,nu)
+fastconv = buildFastConvolution(x,y,h,k,nu)
 
 # or Greengard Vico Quadrature (this is not optimized and is 2-3 times slower)
-fastconv = buildFastConvolution(x,y,h,k,nu, quadRule = "Greengard_Vico");
+fastconv = buildFastConvolution(x,y,h,k,nu, quadRule = "Greengard_Vico")
 
 # assembling the sparsifiying preconditioner
-@time As = buildSparseA(k,X,Y,D0, n ,m);
-nu(X,Y)
+@time As = buildSparseA(k,X,Y,D0, n ,m)
+
 # assembling As*( I + k^2G*nu)
 @time Mapproxsp = As + k^2*(buildSparseAG(k,X,Y,D0, n ,m)*spdiagm(0 => nu(X,Y)));
 
@@ -74,4 +74,5 @@ u = zeros(ComplexF64,N)
 # plotting the solution
 figure(1)
 clf()
-imshow(real(reshape(u+u_inc,n,m)))
+real(reshape(u+u_inc,n,m))
+Plots.plot(real(reshape(u+u_inc,n,m)))

@@ -204,7 +204,7 @@ function buildFastConvolution(x::Array{Float64,1},y::Array{Float64,1},
   if quadRule == "trapezoidal"
 
     (ppw,D) = referenceValsTrapRule();
-    D0      = D[round(Int,k*h)];
+    D0      = D[round(Int,k*h)<1 ? 1 : round(Int,k*h)];
     (n,m) = length(x), length(y)
     Ge    = buildGConv(x,y,h,n,m,D0,k);
     GFFT  = fft(Ge);
@@ -229,7 +229,7 @@ function buildFastConvolution(x::Array{Float64,1},y::Array{Float64,1},
         KX = (2*pi/Lp)*repeat(kx, 1, 4*m);
         KY = (2*pi/Lp)*repeat(ky', 4*n,1);
 
-        S = sqrt(KX.^2 + KY.^2);
+        S = sqrt.(KX.^2 + KY.^2);
 
         GFFT = Gtruncated2D(L, k, S)
         return FastM(GFFT, nu(X,Y), 4*n, 4*m,
@@ -978,17 +978,19 @@ function buildGConv(x,y,h::Float64,n::Int64,m::Int64,D0,k::Float64)
 
     end
 
-    R = sqrt(Xe.^2 + Ye.^2);
+    R = sqrt.(Xe.^2 + Ye.^2)
 
     # to avoid evaluating at the singularity
-    indMiddle = find(R.==0)[1]    # we modify R to remove the zero (so we don't )
-    R[indMiddle] = 1;
+    indMiddle = Tuple.(findall(iszero,R)) # we modify R to remove the zero (so we don't )
+    if !isempty(indMiddle)
+      R[getindex.(indMiddle,1), getindex.(indMiddle,2)] .= 1.0
+    end
     # sampling the Green's function
     Ge = sampleGkernelpar(k,R,h)
     #Ge = pmap( x->1im/4*hankelh1(0,k*x)*h^2, R)
     # modiyfin the diagonal with the quadrature
     # modification
-    Ge[indMiddle] = 1im/4*D0*h^2;
+    Ge[getindex.(indMiddle,1), getindex.(indMiddle,2)] .= 1im/4*D0*h^2;
 
     return Ge
 
@@ -1004,7 +1006,7 @@ function buildGConvPar(x,y,h,n,m,D0,k)
     Xe = repeat(xe, 1, 2*m-1);
     Ye = repeat(ye', 2*n-1,1);
 
-    R = sqrt(Xe.^2 + Ye.^2);
+    R = sqrt.(Xe.^2 + Ye.^2);
     # to avoid evaluating at the singularity
     indMiddle = round(Integer, m)
     # we modify R to remove the zero (so we don't )
@@ -1055,9 +1057,9 @@ function buildConvMatrix(k::Float64,X::Array{Float64,1},Y::Array{Float64,1},D0::
 
     r = zeros(Float64,N)
     for ii = 1:N
-            r  = sqrt( (X-X[ii]).^2 + (Y-Y[ii]).^2);
+            r  = sqrt.( (X-X[ii]).^2 + (Y-Y[ii]).^2);
             r[ii] = 1;
-            G[ii,:] =  1im/4*hankelh1(0, k*r)*h^2;
+            G[ii,:] =  1im/4*hankelh1(0, k.*r)*h^2;
             G[ii,ii]=  1im/4*D0*h^2;
     end
 

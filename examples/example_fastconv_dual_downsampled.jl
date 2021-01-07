@@ -1,11 +1,11 @@
 # small scrip to compute the solution of Lipman Schinwer equation
 # In this case we use the donwsampled function using linear interpolation
 
-
-using PyPlot
+using Images
+using Plots
 using IterativeSolvers
 using SpecialFunctions
-
+using FFTW
 
 include("../src/FastConvolutionDual.jl")
 include("../src/FastConvolution.jl")
@@ -14,8 +14,8 @@ include("../src/FastConvolutionSlowDual.jl")
 include("../src/FastConvolutionDualDownSampled.jl")
 
 
-FFTW.set_num_threads(4);
-BLAS.set_num_threads(4)
+FFTW.set_num_threads(length(Sys.cpu_info()))
+BLAS.set_num_threads(length(Sys.cpu_info()))
 
 #Defining Omega
 h = 0.00025
@@ -28,8 +28,8 @@ x = collect(-a/2:h:a/2)
 y = collect(-b/2:h:b/2)
 (n,m) = length(x), length(y)
 N = n*m
-X = repmat(x, 1, m)[:];
-Y = repmat(y', n,1)[:];
+X = repeat(x, 1, m)[:];
+Y = repeat(y', n,1)[:];
 # we solve \triangle u + k^2(1 + nu(x))u = 0
 
 # We use the modified quadrature in Duan and Rohklin
@@ -38,31 +38,28 @@ D0 = D[1];
 
 window(y,alpha) = 1*(abs.(y).<=alpha/2) + (abs.(y).>alpha/2).*(abs.(y).<alpha).*
                      exp.(2*exp.(-0.5*alpha./(abs.(y)-alpha/2))./
-                         ((abs.(y)-alpha/2)./(0.5*alpha)-1) )
+                         ((abs.(y).-alpha/2)./(0.5*alpha).-1) )
 
 window(y,alpha, beta) = 1*(abs.(y).<=beta) + (abs.(y).>beta).*(abs.(y).<alpha).*
-                           exp.(2*exp.(-(alpha- beta)./(abs.(y)-beta))./
-                               ((abs.(y)-beta)./(alpha- beta)-1) )
+                           exp.(2.0*exp.(-(alpha- beta)./(abs.(y).-beta))./
+                               ((abs.(y).-beta)./(alpha- beta).-1) )
 
 # Defining the smooth perturbation of the slowness
-nu(x,y) = -0.05*(sin(4*pi*x/(0.96))).*
+nu(x,y) = -0.05*(sin.(4*pi.*x./(0.96))).*
           window(y,0.96*b/2, 0.48*b/2).*
           window(x,0.96*0.5, 0.3);
-
-
-figure(1); clf();
-imshow(real(reshape( (1 + nu(X,Y)),n,m)),
-       extent=[y[1], y[end], x[1], x[end]]); cb =  colorbar();
+          
+plot(Gray.(real(reshape( 1 .+  nu(X,Y),n,m))))
 
 
 
 fastconvSlowDual = buildFastConvolutionSlowDual(x,y,h,k,nu, [1.0, 0.0],
                                                 quadRule ="Greengard_Vico");
 
-rhsSlowDual = -k^2*nu(X,Y) + zeros(Complex128,N);
+rhsSlowDual = -k^2*nu(X,Y) + zeros(ComplexF64,N);
 
 # allocating the solution
-sigmaSlow = zeros(Complex128,N);
+sigmaSlow = zeros(ComplexF64,N);
 
 # solving the system using GMRES
 @time info =  gmres!(sigmaSlow, fastconvSlowDual, rhsSlowDual, maxiter = 10 )
@@ -89,13 +86,13 @@ for ii = 0:round(Integer,(n-1)/downsampleX)
     end
 end
 
-index = find(Sindex[:])
-S = speye(n*m, n*m)
+index = findall(!iszero, Sindex[:]) #find(Sindex[:])
+S = sparse(I, n*m, n *m) #speye(n*m, n*m)
 Sampling = S[index,:];
 
-sigmaSlowDown = zeros(Complex128, size(Sampling)[1])
+sigmaSlowDown = zeros(ComplexF64, size(Sampling)[1])
 
-@time info =  gmres!(sigmaSlowDown, fastconvSlowDualDown, Sampling*rhsSlowDual, maxiter = 10 )
+@time info =  gmres!(sigmaSlowDown, fastconvSlowDualDown, Sampling*rhsSlowDual, maxiter = 10 ) 
 # println(info[2].residuals[:])
 
 

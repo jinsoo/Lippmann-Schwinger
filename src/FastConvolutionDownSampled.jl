@@ -2,7 +2,7 @@
 # downsampled lippmann-Schwinger equation 
 using Interpolations
 
-type FastDownSampled
+struct FastDownSampled
     # type to encapsulate the fast application of M = I + omega^2G*spadiagm(nu)
     # Fast:: FastMslow
     Fast:: FastM
@@ -23,7 +23,7 @@ type FastDownSampled
             end
         end
 
-        index = find(Sindex[:])
+        index = findall(Sindex[:])
         S = speye(n*m, n*m)
         Sampling = S[index,:];
         return new( Fast, Fast.n, Fast.m, downsample,Sampling)
@@ -33,7 +33,7 @@ end
 
 import Base.*
 
-function *(M::FastDownSampled, b::Array{Complex128,1})
+function *(M::FastDownSampled, b::Array{ComplexF64,1})
     knots = (collect(1:M.downsample:M.n), collect(1:M.downsample:M.m))
     nDown = round(Integer, (M.n-1)/M.downsample +1)
     mDown = round(Integer, (M.m-1)/M.downsample +1)

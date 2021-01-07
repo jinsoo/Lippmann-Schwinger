@@ -1,9 +1,9 @@
 # Class containing the objects for the windowed version of the integral operator
 # for the slow varying quantity along the principal ray direction
 
-type FastMslow
+struct FastMslow
     # type to encapsulate the fast application of M = I + omega^2G*spadiagm(nu)
-    GFFT :: Array{Complex128,2}
+    GFFT :: Array{ComplexF64,2}
     nu :: Array{Float64,1}
     x  :: Array{Float64,1}
     y  :: Array{Float64,1}
@@ -20,7 +20,7 @@ type FastMslow
 end
 
 import Base.*
-import Base.A_mul_B!
+import LinearAlgebra.mul!
 import Base.eltype
 import Base.size
 
@@ -29,12 +29,12 @@ function size(M::FastMslow, dim::Int64)
     return M.n*M.m
 end
 
-function *(M::FastMslow, b::Array{Complex128,1})
+function *(M::FastMslow, b::Array{ComplexF64,1})
     # function to overload the applyication of
     # M using a Toeplitz reduction via a FFT
 
     # Allocate the space for the extended B
-    BExt = zeros(Complex128,M.ne, M.me);
+    BExt = zeros(ComplexF64,M.ne, M.me);
     # Apply spadiagm(nu) and ented by zeros
     BExt[1:M.n,1:M.m]= reshape((exp(1im*M.omega*(M.e[1]*M.x + M.e[2]*M.y)).*M.nu).*b,M.n,M.m) ;
 
@@ -51,7 +51,7 @@ function *(M::FastMslow, b::Array{Complex128,1})
     return (b + (exp(-1im*M.omega*(M.e[1]*M.x + M.e[2]*M.y)).*(B[:])))
 end
 
-function A_mul_B!(Y,
+function mul!(Y,
                   M::FastMslow,
                   V)
     # in place matrix matrix multiplication
@@ -76,8 +76,8 @@ end
 #             (n,m) = length(x), length(y)
 #             Ge    = buildGConv(x,y,h,n,m,D0,k);
 #             GFFT  = fft(Ge);
-#             X = repmat(x, 1, m)[:]
-#             Y = repmat(y', n,1)[:]
+#             X = repeat(x, 1, m)[:]
+#             Y = repeat(y', n,1)[:]
 #         end
 #     return FastM(GFFT,nu(X,Y),2*n-1,2*m-1,n, m, k);
 
@@ -86,16 +86,16 @@ end
 #       Lp = 4*(abs(x[end] - x[1]) + h)
 #       L  =   (abs(x[end] - x[1]) + h)*1.5
 #       (n,m) = length(x), length(y)
-#       X = repmat(x, 1, m)[:]
-#       Y = repmat(y', n,1)[:]
+#       X = repeat(x, 1, m)[:]
+#       Y = repeat(y', n,1)[:]
 
 #       # this is depending if n is odd or not
 #       if mod(n,2) == 0
 #         kx = (-(2*n):1:(2*n-1));
 #         ky = (-(2*m):1:(2*m-1));
 
-#         KX = (2*pi/Lp)*repmat(kx, 1, 4*m);
-#         KY = (2*pi/Lp)*repmat(ky', 4*n,1);
+#         KX = (2*pi/Lp)*repeat(kx, 1, 4*m);
+#         KY = (2*pi/Lp)*repeat(ky', 4*n,1);
 
 #         S = sqrt(KX.^2 + KY.^2);
 
@@ -106,8 +106,8 @@ end
 #         # kx = (-2*(n-1):1:2*(n-1) )/4;
 #         # ky = (-2*(m-1):1:2*(m-1) )/4;
 
-#         # KX = (2*pi/Lp)*repmat(kx, 1, 4*m-3);
-#         # KY = (2*pi/Lp)*repmat(ky', 4*n-3,1);
+#         # KX = (2*pi/Lp)*repeat(kx, 1, 4*m-3);
+#         # KY = (2*pi/Lp)*repeat(ky', 4*n-3,1);
 
 #         # S = sqrt(KX.^2 + KY.^2);
 
@@ -119,8 +119,8 @@ end
 #         kx = (-2*n:1:2*n-1);
 #         ky = (-2*m:1:2*m-1);
 
-#         KX = (2*pi/Lp)*repmat( kx, 1,4*m);
-#         KY = (2*pi/Lp)*repmat(ky',4*n,  1);
+#         KX = (2*pi/Lp)*repeat( kx, 1,4*m);
+#         KY = (2*pi/Lp)*repeat(ky',4*n,  1);
 
 #         S = sqrt(KX.^2 + KY.^2);
 
@@ -148,8 +148,8 @@ function buildGConvWindowed(x,y,h::Float64,n::Int64,m::Int64,D0,k::Float64)
       xe = collect((x[1]-(n-1)/2*h):h:(x[end]+(n-1)/2*h));
       ye = collect((y[1]-(m-1)/2*h):h:(y[end]+(m-1)/2*h));
 
-      Xe = repmat(xe, 1, 2*m-1);
-      Ye = repmat(ye', 2*n-1,1);
+      Xe = repeat(xe, 1, 2*m-1);
+      Ye = repeat(ye', 2*n-1,1);
       # to avoid evaluating at the singularity
       indMiddle = m
 
@@ -161,14 +161,14 @@ function buildGConvWindowed(x,y,h::Float64,n::Int64,m::Int64,D0,k::Float64)
       # xe = collect((x[1]-n/2*h):h:(x[end]+n/2*h));
       # ye = collect((y[1]-m/2*h):h:(y[end]+m/2*h));
 
-      # Xe = repmat(xe, 1, 2*m-1);
-      # Ye = repmat(ye', 2*n-1,1);
+      # Xe = repeat(xe, 1, 2*m-1);
+      # Ye = repeat(ye', 2*n-1,1);
       # # to avoid evaluating at the singularity
       # indMiddle = m
 
     end
 
-    R = sqrt(Xe.^2 + Ye.^2);
+    R = sqrt.(Xe.^2 + Ye.^2);
 
     # we modify R to remove the zero (so we don't )
     R[indMiddle,indMiddle] = 1;

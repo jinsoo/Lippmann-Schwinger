@@ -13,8 +13,8 @@ include("../src/Preconditioner.jl")
 include("../src/FastConvolutionSlowDual.jl")
 
 
-FFTW.set_num_threads(4);
-BLAS.set_num_threads(4)
+FFTW.set_num_threads(length(Sys.cpu_info()))
+BLAS.set_num_threads(length(Sys.cpu_info()))
 
 #Defining Omega
 h = 0.0015
