@@ -68,11 +68,8 @@ rhs = -k^2*FFTconvolution(fastconv, nu(X,Y).*u_inc) ;
 u = zeros(ComplexF64,N)
 
 # solving the system using GMRES
-@time info =  gmres!(u, fastconv, rhs, Pl=precond, log = true)
+@time info =  gmres!(u, fastconv, rhs, Pl=precond, log = true, maxiter=100)
 #println(info[2].residuals[:])
 
 # plotting the solution
-figure(1)
-clf()
-real(reshape(u+u_inc,n,m))
-Plots.plot(real(reshape(u+u_inc,n,m)))
+plot(Gray.(real(reshape(u+u_inc,n,m))))

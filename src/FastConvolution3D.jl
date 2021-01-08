@@ -2,10 +2,10 @@
 # in 3D and all the necessary machinery to build the preconditioner
 
 
-type FastM3D
+struct FastM3D
     ## we may want to add an FFT plan to make the evaluation faster
     # type to encapsulate the fast application of M = I + omega^2G*spadiagm(nu)
-    GFFT :: Array{Complex128,3}
+    GFFT :: Array{ComplexF64,3}
     nu :: Array{Float64,1}
     # number of points in the extended domain
     ne :: Int64
@@ -26,7 +26,7 @@ end
 import Base.*
 
 
-function *(M::FastM3D, b::Array{Complex128,1}; verbose::Bool=false)
+function *(M::FastM3D, b::Array{ComplexF64,1}; verbose::Bool=false)
     # multiply by nu, compute the convolution and then
     # multiply by omega^2
     B = M.omega^2*(FFTconvolution(M,M.nu.*b, verbose=verbose))
@@ -34,16 +34,16 @@ function *(M::FastM3D, b::Array{Complex128,1}; verbose::Bool=false)
     return (b + B)
 end
 
-@inline function FFTconvolution(M::FastM3D, b::Array{Complex128,1};
+@inline function FFTconvolution(M::FastM3D, b::Array{ComplexF64,1};
                                 verbose::Bool=false )
     # function to compute the convolution with the convolution kernel
     # defined within the FastM3D type using the FFT
     # TODO add a fft plan in here to accelerate the speed
     # input: M::FastM3D type containing the convolution kernel
-    #        b::Array{Complex128,1} vector to apply the conv kernel
+    #        b::Array{ComplexF64,1} vector to apply the conv kernel
     verbose && println("Application of the 3D convolution")
     # Allocate the space for the extended B
-    BExt = zeros(Complex128,M.ne, M.ne, M.le);
+    BExt = zeros(ComplexF64,M.ne, M.ne, M.le);
     # zero padding
     BExt[1:M.n,1:M.m,1:M.l]= reshape(b,M.n,M.m,M.l) ;
 
@@ -71,14 +71,14 @@ end
   #           fastconv: FastM3D type for the application of the
   #                     discrete convolution kernel
 
-  R  = zeros(Complex128, length(indS), length(X))
+  R  = zeros(ComplexF64, length(indS), length(X))
    for i = 1:length(indS)
       #for i = 1:length(indS)
       ii = indS[i]
       R[i,ii] = 1;
     end
 
-   Gc =  zeros(Complex128, length(indS), length(X))
+   Gc =  zeros(ComplexF64, length(indS), length(X))
    # this can be parallelized but then, we may have cache
    # aceess problem
     for i = 1:length(indS)
@@ -104,7 +104,7 @@ end
   Yshared = convert(SharedArray, Y)
   Zshared = convert(SharedArray, Z)
   @sync begin
-    @parallel for i = 1:length(indS)
+    @distributed for i = 1:length(indS)
       #for i = 1:length(indS)
       ii = indS[i]
       R[i,:]  = sqrt( (Xshared-Xshared[ii]).^2 + (Yshared-Yshared[ii]).^2 + (Zshared-Zshared[ii]).^2);
@@ -153,7 +153,7 @@ end
 # @everywhere function sampleGkernelparTruncated3D(k,r::Array{Float64,1},h)
 #   n  = length(r)
 #   println("Sample kernel parallel loop ")
-#   G = SharedArray(Complex128,n)
+#   G = SharedArray(ComplexF64,n)
 #   rshared = convert(SharedArray, r)
 #   @sync @parallel for ii = 1:n
 #           @inbounds  G[ii] = 1im/4*hankelh1(0, k*rshared[ii])*h^2;
@@ -166,7 +166,7 @@ end
 # @everywhere function sampleGkernelpar(k,R::Array{Float64,2},h)
 #   (m,n)  = size(R)
 #   println("Sample kernel parallel loop with chunks ")
-#   G = SharedArray(Complex128,m,n)
+#   G = SharedArray(ComplexF64,m,n)
 #   @time Rshared = convert(SharedArray, R)
 #   @sync begin
 #         for p in procs(G)
@@ -222,7 +222,7 @@ function buildFastConvolution3D(x,y,z,X,Y,Z,h,k,nu; quadRule::String = "Greengar
         ### GFFT = [ Gtruncated3D(L,k,sqrt(kx[i]^2 + ky[j]^2 + kz[p]^2)) for i=1:4*n, j=1:4*m, p=1:4*l]
 
         # Computing the convolution kernel (we just use a for loop in order to save memory)
-        GFFT = zeros(Complex128, 4*n, 4*m, 4*l)
+        GFFT = zeros(ComplexF64, 4*n, 4*m, 4*l)
 
         for ii=1:4*n, jj=1:4*m, pp=1:4*l
           GFFT[ii,jj,pp]  = Gtruncated3D(L,k,sqrt(kx[ii]^2 + ky[jj]^2 + kz[pp]^2));
@@ -248,7 +248,7 @@ function buildFastConvolution3D(x,y,z,X,Y,Z,h,k,nu; quadRule::String = "Greengar
         ### GFFT = [ Gtruncated3D(L,k,sqrt(kx[i]^2 + ky[j]^2 + kz[p]^2)) for i=1:4*n-3, j=1:4*m-3, p=1:4*l-3 ]
 
         # Computing the convolution kernel (we just use a for loop in order to save memory)
-        GFFT = zeros(Complex128, 4*n-3, 4*m-3, 4*l-3)
+        GFFT = zeros(ComplexF64, 4*n-3, 4*m-3, 4*l-3)
 
         # This loop can be easily parallelized
         for i=1:4*n-3, j=1:4*m-3, p=1:4*l-3
@@ -533,14 +533,14 @@ end
   #           D0: how to compute the qudrature fast
   # function to sample the Green's function at frequency k
 
-  R  = zeros(Complex128, length(indS), length(X))
+  R  = zeros(ComplexF64, length(indS), length(X))
    for i = 1:length(indS)
       #for i = 1:length(indS)
       ii = indS[i]
       R[i,ii] = 1;
     end
 
-   Gc =  zeros(Complex128, length(indS), length(X))
+   Gc =  zeros(ComplexF64, length(indS), length(X))
     for i = 1:length(indS)
         Gc[i,:]= FFTconvolution(fastconv, R[i,:][:])
     end
@@ -556,7 +556,7 @@ function entriesSparseG3D(k::Float64,X::Array{Float64,1},Y::Array{Float64,1},
   # we need to have an even number of points
   #
 
-  Entries  = Array{Complex128}[]
+  Entries  = Array{ComplexF64}[]
 
   N = n*m*l;
 
@@ -726,7 +726,7 @@ function entriesSparseA3D(k,X::Array{Float64,1},Y::Array{Float64,1},
   # in this case we need to build everythig with ranodmized methods
   # we need to have an odd number of points
   #@assert mod(length(X),2) == 1
-  Entries  = Array{Complex128}[]
+  Entries  = Array{ComplexF64}[]
   Indices  = Array{Int64}[]
 
   N = n*m*l;

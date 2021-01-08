@@ -6,7 +6,7 @@
 using PyPlot
 using IterativeSolvers
 using SpecialFunctions
-
+using FFTW
 include("../src/FastConvolutionSlow.jl")
 include("../src/FastConvolution.jl")
 include("../src/Preconditioner.jl")
@@ -25,8 +25,8 @@ x = -a/2:h:a/2
 y = -a/2:h:a/2
 (n,m) = length(x), length(y)
 N = n*m
-X = repmat(x, 1, m)[:]
-Y = repmat(y', n,1)[:]
+X = repeat(x, 1, m)[:]
+Y = repeat(y', n,1)[:]
 # we solve \triangle u + k^2(1 + nu(x))u = 0
 
 # We use the modified quadrature in Ruan and Rohklin
@@ -76,7 +76,7 @@ u_inc = exp.(k*im*X);
 rhs = -(fastconv*u_inc - u_inc);
 
 # allocating the solution
-u = zeros(Complex128,N);
+u = zeros(ComplexF64,N);
 
 # solving the system using GMRES
 @time info =  gmres!(u, fastconv, rhs, Pl = precond)
@@ -95,7 +95,7 @@ title("\$u(x)/e^{ikx}\$ ")
 intx = cumsum(sqrt(1-nu(x,0*x)))*h;
 u_gem = exp.(k*im*intx);
 
-UUgem = repmat(u_gem, 1,n)
+UUgem = repeat(u_gem, 1,n)
 
 figure(4); clf()
 imshow(real(reshape((u+u_inc)./UUgem[:], n,m))); colorbar()
@@ -108,7 +108,7 @@ xRef = -a/2:h/refFact:a/2
 intxRef = cumsum(sqrt(1-nu(xRef,0*xRef)))*h/refFact;
 u_gem = exp.(k*im*intxRef)[1:refFact:end];
 
-UUgem = repmat(u_gem, 1,n)
+UUgem = repeat(u_gem, 1,n)
 
 figure(14); clf()
 imshow(real(reshape(-(u+u_inc)./UUgem[:], n,m))); colorbar()
@@ -177,7 +177,7 @@ plot(real(ucomp[:]))
 rhsslow = -(fastconv*u_inc - u_inc)./u_inc;
 
 # allocating the solution
-uslow = zeros(Complex128,N);
+uslow = zeros(ComplexF64,N);
 
 @time info =  gmres!(uslow, fastconvslow, rhsslow);
 
@@ -194,7 +194,7 @@ fastconvslowWindow = FastMslow(GFFT,nu1(X,Y),X,Y,3*n-2,3*m-2,n, m, k, [1 ,0]);
 
 rhsslowWindow = -(fastconvWindow*u_inc - u_inc)./u_inc;
 
-uslowWindow = zeros(Complex128,N);
+uslowWindow = zeros(ComplexF64,N);
 
 @time info =  gmres!(uslowWindow , fastconvslowWindow, rhsslowWindow)
 
@@ -252,7 +252,7 @@ title("T_k (u- u_slowwindow)")
 # rhs1 = -(fastconv1*u_inc - u_inc);
 
 # # allocating the solution
-# u1 = zeros(Complex128,N);
+# u1 = zeros(ComplexF64,N);
 
 # # solving the system using GMRES
 # @time info =  gmres!(u1, fastconv1, rhs1, precond1)
